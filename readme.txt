@@ -1,3 +1,5 @@
+I used assembly ai api for transciprting youtube video speech into text and use python library as well for first download audio of this video file
+-------------------------------------------------------
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import render, redirect
