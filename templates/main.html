@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Main Page</title>
+    {% load static %} <!-- Load the static template tag library -->
+    <style>
+        .hero-container {
+            position: relative; /* Add position relative to allow absolute positioning */
+            background-image: url('{% static "img/website.png" %}');
+            background-size: cover;
+            background-position: center;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end; /* Align content at the bottom */
+            align-items: flex-start; /* Align content at the left */
+            padding: 20px; /* Add padding for better appearance */
+        }
+
+        /* Style for the buttons */
+        .login-signup-buttons {
+            position: absolute; /* Position absolutely within the hero-container */
+            bottom: 20px; /* Distance from the bottom */
+            left: 20px; /* Distance from the left */
+        }
+
+        /* Style for the buttons inside the container */
+        .login-signup-buttons a {
+            display: block; /* Make buttons block elements for proper alignment */
+            margin: 0px 0px 37px 55px; /* Add margin between buttons */
+            text-decoration: none; /* Remove default underline */
+            color: white; /* Text color */
+            background-color: blue; /* Background color */
+            padding: 15px 185px;/* Padding for better appearance */
+            font-size: larger;
+            font-weight: bold;
+            border-radius: 12px; /* Rounded corners */
+        }
+   
+
+        /* Style for button hover effect */
+        .login-signup-buttons a:hover {
+            background-color: darkblue; /* Change background color on hover */
+        }
+    </style>
+</head>
+<body>
+    <section id="hero">
+        <div class="hero-container">
+            <div class="login-signup-buttons">
+                <a href="login">Login</a>
+                <a href="signup">Signup</a>
+            </div>
+        </div>
+    </section>
+</body>
+</html>
