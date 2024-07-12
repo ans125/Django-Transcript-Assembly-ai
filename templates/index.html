@@ -5,62 +5,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Blog Generator</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-
     <style>
         @keyframes rotate {
-            from {
-                transform: rotate(0deg);
-            }
-            to { 
-                transform: rotate(360deg);
-            }
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
-         
-        
-         @-webkit-keyframes rotate {
-            from {
-                -webkit-transform: rotate(0deg);
-            }
-            to { 
-                -webkit-transform: rotate(360deg);
-            }
-        }
-        
         .load {
             width: 100px;
             height: 100px;
             margin: 110px auto 0;
-            border:solid 10px #8822aa;
+            border: solid 10px #8822aa;
             border-radius: 50%;
             border-right-color: transparent;
             border-bottom-color: transparent;
-             -webkit-transition: all 0.5s ease-in;
-            -webkit-animation-name:             rotate; 
-            -webkit-animation-duration:         1.0s; 
-            -webkit-animation-iteration-count:  infinite;
-            -webkit-animation-timing-function: linear;
-                
-                 transition: all 0.5s ease-in;
-            animation-name:             rotate; 
-            animation-duration:         1.0s; 
-            animation-iteration-count:  infinite;
-            animation-timing-function: linear; 
+            animation: rotate 1s linear infinite;
+        }
+        /* Add background image and low opacity */
+        body {
+            background-image: url('your-background-image-url.jpg');
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            opacity: 0.9; /* Adjust opacity as desired */
         }
     </style>
 </head>
-<body class="flex flex-col min-h-scrren bg-gray-100 font-sans antialised">
+<body class="flex flex-col min-h-screen bg-gray-100 font-sans antialiased">
     <!-- Navbar -->
     <nav class="bg-blue-600 p-4 text-white flex justify-between">
-        <div class="text-lg"> <!-- Adjust font size as needed -->
+        <div class="text-lg">
             <h1 class="text-3xl font-bold">Video to Speech Web Application</h1>
         </div>
-        <div>
+        <div class="space-x-4">
             <a href="/" class="text-white hover:underline bg-blue-500 px-4 py-2 rounded-md">Welcome {{ user.username }}</a>
             <a href="/blog-list" class="text-white hover:underline bg-blue-500 px-4 py-2 rounded-md">Saved Blog Posts</a>
             <a href="/logout" class="text-white hover:underline bg-blue-500 px-4 py-2 rounded-md">Logout</a>
         </div>
     </nav>
-
 
     <br>
     <br>
@@ -68,7 +49,6 @@
     <!-- Main -->
     <div class="flex-grow container mx-auto mt-10 px-4 sm:px-0">
         <div class="max-w-3xl mx-auto bg-white p-6 rounded-lg shadow-md transition-transform transform hover:scale-105 flex flex-col">
-
             <!-- Introduction section -->
             <div class="text-center">
                 <h1 class="text-3xl font-bold">Video to Speech Web Application</h1>
@@ -83,78 +63,164 @@
             <div>
                 <h2 class="text-xl mb-4 font-semibold">Enter Video Link</h2>
                 <div class="flex space-x-4">
-                    <input id="youtubeLink" type="url" placeholder="Paste Youtube Link..." class="flex-grow p-2 border border-blue-400 rounded-l-md">
+                    <input id="youtubeLink" type="url" placeholder="Paste YouTube Link..." class="flex-grow p-2 border border-blue-400 rounded-l-md">
                     <button id="generateBlogButton" class="bg-blue-600 text-white px-4 py-2 rounded-r-md hover:bg-blue-700 transition-colors">Generate</button>
                 </div>
             </div>
 
+            <!-- Download section -->
+            <div class="mt-6">
+                <h2 class="text-xl mb-4 font-semibold">Download Options</h2>
+                <div class="flex space-x-4">
+                    <select id="downloadQuality" class="p-2 border border-blue-400 rounded-l-md">
+                        <option value="audio">Audio</option>
+                        <option value="video_1080p">Video 1080p</option>
+                        <option value="video_720p">Video 720p</option>
+                        <option value="video_480p">Video 480p</option>
+                    </select>
+                    <button id="downloadButton" class="bg-blue-600 text-white px-4 py-2 rounded-r-md hover:bg-blue-700 transition-colors">Download</button>
+                </div>
+            </div>
 
             <!-- section for loading circle -->
             <div style="display: none;" id="loading-circle" class="load"></div>
 
-
             <!-- Generated Blog Display Section -->
             <section class="mt-10 flex-grow">
-                <h2 class="text-xl mb-4 font-semibold">Transcription is Below :</h2>
-                <div id="blogContent" class="mt-2 text-gray-700 space-y-4">
-                    
+                <h2 class="text-xl mb-4 font-semibold">Original Transcription</h2>
+                <div id="blogContent" class="mt-2 text-gray-700 space-y-4"></div>
+            </section>
+
+            <!-- Translated Blog Display Section -->
+            <section class="mt-10 flex-grow">
+                <h2 class="text-xl mb-4 font-semibold">Transcription Your transcription</h2>
+                <div class="flex space-x-4">
+                    <select id="translationLanguage" class="p-2 border border-blue-400 rounded-l-md">
+                        <!-- <option value="disabled">Select a language</option> -->
+                        <option value="ur">Urdu</option>
+                        <option value="">English</option>
+                        <option value="es">Spanish</option>
+                        <option value="fr">French</option>
+                        <option value="de">German</option>
+                        <!-- <option value="zh">Chinese</option> -->
+                        <!-- Add more languages as needed -->
+                    </select>
+                    <button id="translateButton" class="bg-blue-600 text-white px-4 py-2 rounded-r-md hover:bg-blue-700 transition-colors">Translate</button>
                 </div>
+                <div id="blogContentTranslated" class="mt-2 text-gray-700 space-y-4"></div>
             </section>
         </div>
     </div>
 
-
-    <footer class="text-center p-4 text-blacl mt-6">
+    <footer class="text-center p-4 text-black mt-6">
         Created By<a href="">Anas</a>
     </footer>
 
     <script>
-       document.getElementById('generateBlogButton').addEventListener('click', async () => {
-    // Get the input value of the YouTube link
-    const youtubeLink = document.getElementById('youtubeLink').value;
-    // Get the element where the blog content will be displayed
-    const blogContent = document.getElementById('blogContent');
-    
-    if(youtubeLink) {
-        // Display loading spinner
-        document.getElementById('loading-circle').style.display = 'block';
-        
-        // Clear previous content
-        blogContent.innerHTML = '';
+        document.getElementById('generateBlogButton').addEventListener('click', async () => {
+            const youtubeLink = document.getElementById('youtubeLink').value;
+            const blogContent = document.getElementById('blogContent');
+            const blogContentTranslated = document.getElementById('blogContentTranslated');
 
-        // API endpoint URL for generating the blog
-        const endpointUrl = '/generate-blog';
-        
-        try {
-            // Fetch data from the API endpoint
-            const response = await fetch(endpointUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ link: youtubeLink })
-            });
+            if (youtubeLink) {
+                document.getElementById('loading-circle').style.display = 'block';
+                blogContent.innerHTML = '';
+                blogContentTranslated.innerHTML = '';
 
-            // Parse response data as JSON
-            const data = await response.json();
+                const endpointUrl = '/generate-blog';
 
-            // Display generated content
-            blogContent.innerHTML = data.content;
+                try {
+                    const response = await fetch(endpointUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ link: youtubeLink })
+                    });
 
-        } catch (error) {
-            // Log and display error message
-            console.error("Error occurred:", error);
-            alert("Something went wrong. Please try again later.");
-            
-        }
-        // Hide loading spinner
-        document.getElementById('loading-circle').style.display = 'none';
-    } else {
-        // Alert if YouTube link is not provided
-        alert("Please enter a YouTube link.");
-    }
-});
-</script>
+                    const data = await response.json();
+                    blogContent.innerHTML = data.content;
+                    blogContentTranslated.innerHTML = data.translated_content_urdu;
 
+                } catch (error) {
+                    console.error("Error occurred:", error);
+                    alert("Something went wrong. Please try again later.");
+                }
+
+                document.getElementById('loading-circle').style.display = 'none';
+            } else {
+                alert("Please enter a YouTube link.");
+            }
+        });
+
+        document.getElementById('downloadButton').addEventListener('click', async () => {
+            const youtubeLink = document.getElementById('youtubeLink').value;
+            const quality = document.getElementById('downloadQuality').value;
+            const downloadButton = document.getElementById('downloadButton');
+            const loadingCircle = document.getElementById('loading-circle');
+
+            if (youtubeLink) {
+                const endpointUrl = `/download?link=${encodeURIComponent(youtubeLink)}&quality=${quality}`;
+
+                downloadButton.disabled = true;
+                loadingCircle.style.display = 'block';
+
+                try {
+                    const response = await fetch(endpointUrl);
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = `${quality}.mp4`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                } catch (error) {
+                    console.error("Error occurred:", error);
+                    alert("Something went wrong. Please try again later.");
+                }
+
+                downloadButton.disabled = false;
+                loadingCircle.style.display = 'none';
+            } else {
+                alert("Please enter a YouTube link.");
+            }
+        });
+
+        document.getElementById('translateButton').addEventListener('click', async () => {
+            const language = document.getElementById('translationLanguage').value;
+            const originalContent = document.getElementById('blogContent').innerText;
+            const blogContentTranslated = document.getElementById('blogContentTranslated');
+
+            if (originalContent) {
+                document.getElementById('loading-circle').style.display = 'block';
+                blogContentTranslated.innerHTML = '';
+
+                const endpointUrl = '/translate-content';
+
+                try {
+                    const response = await fetch(endpointUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ content: originalContent, language: language })
+                    });
+
+                    const data = await response.json();
+                    blogContentTranslated.innerHTML = data.translated_content;
+
+                } catch (error) {
+                    console.error("Error occurred:", error);
+                    alert("Something went wrong. Please try again later.");
+                }
+
+                document.getElementById('loading-circle').style.display = 'none';
+            } else {
+                alert("Please generate the transcription first.");
+            }
+        });
+    </script>
 </body>
 </html>

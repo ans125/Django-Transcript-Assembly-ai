@@ -1,191 +1,216 @@
-
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
+from django.http import JsonResponse, StreamingHttpResponse
 from django.conf import settings
 import json
-from pytube import YouTube
+import yt_dlp
 import os
-import assemblyai as aai
+import requests
+import time
+import logging
+from googletrans import Translator
+import mimetypes
+
 from .models import BlogPost
 
-# View for rendering the index page, accessible only to logged-in users
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+
+translator = Translator()
+
 def main(request):
     return render(request, 'main.html')
+
 @login_required
 def index(request):
-    """
-    Renders the index page.
-    
-    Returns:
-        Rendered index page.
-    """
     return render(request, 'index.html')
 
-# View for generating blog content from a YouTube video link
 @csrf_exempt
 def generate_blog(request):
-    """
-    Generates blog content from a YouTube video link.
-    
-    If the request method is POST, it extracts the YouTube link from the request data,
-    retrieves the video title and transcript, generates blog content from the transcript,
-    saves the blog article to the database, and returns the generated content as a response.
-    If the request method is not POST, it returns an error response.
-    
-    Returns:
-        JSON response containing the generated blog content or an error message.
-    """
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
-            yt_link = data['link']
-        except (KeyError, json.JSONDecodeError):
-            return JsonResponse({'error': 'Invalid data sent'}, status=400)
+            yt_link = data.get('link')  # Use get() to avoid KeyError
+            if not yt_link:
+                return JsonResponse({'error': 'Invalid data sent: link missing'}, status=400)
+            
+            title = yt_title(yt_link)
+            if not title:
+                return JsonResponse({'error': 'Failed to get YouTube video title'}, status=500)
+            
+            transcription = get_transcription(yt_link)
+            if not transcription:
+                return JsonResponse({'error': 'Failed to get transcript'}, status=500)
 
-        # get YouTube video title
-        title = yt_title(yt_link)
+            # Translate to Urdu
+            translated_content_urdu = translator.translate(transcription, src='en', dest='ur').text
 
-        # get transcript from the YouTube video
-        transcription = get_transcription(yt_link)
-        if not transcription:
-            return JsonResponse({'error': "Failed to get transcript"}, status=500)
+            blog_content = generate_blog_from_transcription(transcription)
+            if not blog_content:
+                return JsonResponse({'error': 'Failed to generate blog article'}, status=500)
 
-        # generate blog content from the transcript
-        blog_content = generate_blog_from_transcription(transcription)
-        if not blog_content:
-            return JsonResponse({'error': "Failed to generate blog article"}, status=500)
+            new_blog_article = BlogPost.objects.create(
+                user=request.user,
+                youtube_title=title,
+                youtube_link=yt_link,
+                generated_content=blog_content,
+            )
+            new_blog_article.save()
 
-        # save blog article to database
-        new_blog_article = BlogPost.objects.create(
-            user=request.user,
-            youtube_title=title,
-            youtube_link=yt_link,
-            generated_content=blog_content,
-        )
-        new_blog_article.save()
-
-        # return blog article as a response
-        return JsonResponse({'content': blog_content})
+            return JsonResponse({'content': blog_content, 'translated_content_urdu': translated_content_urdu})
+        
+        except json.JSONDecodeError as e:
+            logging.error(f"JSON decode error: {e}")
+            return JsonResponse({'error': 'Invalid JSON data sent'}, status=400)
+        
+        except Exception as e:
+            logging.error(f"Error generating blog: {e}")
+            return JsonResponse({'error': 'Internal Server Error'}, status=500)
+    
     else:
         return JsonResponse({'error': 'Invalid request method'}, status=405)
 
-# Helper function to get the YouTube video title
 def yt_title(link):
-    """
-    Retrieves the title of a YouTube video.
-    
-    Args:
-        link (str): The YouTube video link.
-    
-    Returns:
-        str: The title of the YouTube video.
-    """
-    yt = YouTube(link)
-    title = yt.title
-    return title
+    try:
+        ydl_opts = {}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info_dict = ydl.extract_info(link, download=False)
+            return info_dict.get('title', None)
+    except Exception as e:
+        logging.error(f"Error getting YouTube title: {e}")
+        return None
 
-# Helper function to download audio from a YouTube video
+@csrf_exempt
+def download(request):
+    try:
+        link = request.GET.get('link')
+        quality = request.GET.get('quality')
+        
+        if not link or not quality:
+            return JsonResponse({'error': 'Missing link or quality parameter'}, status=400)
+        
+        audio_formats = {
+            'audio': 'bestaudio/best',
+        }
+        video_formats = {
+            'video_1080p': 'bestvideo[height<=1080]+bestaudio/best',
+            'video_720p': 'bestvideo[height<=720]+bestaudio/best',
+            'video_480p': 'bestvideo[height<=480]+bestaudio/best',
+        }
+        
+        ydl_opts = {
+            'format': audio_formats.get(quality) if quality in audio_formats else video_formats.get(quality),
+            'outtmpl': os.path.join(settings.MEDIA_ROOT, '%(id)s.%(ext)s'),
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info_dict = ydl.extract_info(link, download=True)
+            download_file = ydl.prepare_filename(info_dict)
+        
+        mime_type, _ = mimetypes.guess_type(download_file)
+        response = StreamingHttpResponse(open(download_file, 'rb'), content_type=mime_type)
+        response['Content-Disposition'] = f'attachment; filename={os.path.basename(download_file)}'
+        return response
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
 def download_audio(link):
-    """
-    Downloads audio from a YouTube video.
+    try:
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': os.path.join(settings.MEDIA_ROOT, '%(id)s.%(ext)s'),
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info_dict = ydl.extract_info(link, download=True)
+            audio_file = ydl.prepare_filename(info_dict).replace('.webm', '.mp3').replace('.m4a', '.mp3')
+        return audio_file
     
-    Args:
-        link (str): The YouTube video link.
-    
-    Returns:
-        str: The path to the downloaded audio file.
-    """
-    yt = YouTube(link)
-    video = yt.streams.filter(only_audio=True).first()
-    out_file = video.download(output_path=settings.MEDIA_ROOT)
-    base, ext = os.path.splitext(out_file)
-    new_file = base + '.mp3'
-    os.rename(out_file, new_file)
-    return new_file
+    except Exception as e:
+        logging.error(f"Error downloading audio: {e}")
+        return None
 
-# Helper function to get transcription from the audio file using AssemblyAI
 def get_transcription(link):
-    """
-    Retrieves transcription from an audio file using AssemblyAI.
+    try:
+        audio_file = download_audio(link)
+        if not audio_file:
+            return None
+        
+        api_key = os.getenv('ASSEMBLYAI_API_KEY')
+        if not api_key:
+            logging.error("Please provide an API key via the ASSEMBLYAI_API_KEY environment variable or the global settings.")
+            return None
+
+        headers = {
+            "authorization": api_key,
+            "content-type": "application/json"
+        }
+        
+        upload_url = "https://api.assemblyai.com/v2/upload"
+        transcribe_url = "https://api.assemblyai.com/v2/transcript"
+        
+        with open(audio_file, 'rb') as f:
+            upload_response = requests.post(upload_url, headers=headers, files={'file': f})
+        
+        if upload_response.status_code != 200:
+            logging.error(f"Error uploading file: {upload_response.json()}")
+            return None
+        
+        transcript_request = {
+            "audio_url": upload_response.json().get('upload_url')
+        }
+        
+        transcribe_response = requests.post(transcribe_url, headers=headers, json=transcript_request)
+        if transcribe_response.status_code != 200:
+            logging.error(f"Error requesting transcription: {transcribe_response.json()}")
+            return None
+        
+        transcript_id = transcribe_response.json().get('id')
+        
+        while True:
+            status_response = requests.get(f"{transcribe_url}/{transcript_id}", headers=headers)
+            status_json = status_response.json()
+            if status_json['status'] == 'completed':
+                return status_json['text']
+            elif status_json['status'] == 'failed':
+                logging.error(f"Transcription failed: {status_json}")
+                return None
+            time.sleep(5)
     
-    Args:
-        link (str): The YouTube video link.
-    
-    Returns:
-        str: The transcription text.
-    """
-    audio_file = download_audio(link)
-    aai.settings.api_key = "84d29c9d45e04dc2870c581dfd197bff"  # Your AssemblyAI API key
+    except Exception as e:
+        logging.error(f"Error processing transcription: {e}")
+        return None
 
-    transcriber = aai.Transcriber()
-    transcript = transcriber.transcribe(audio_file)
-
-    return transcript.text
-
-# Helper function to generate blog content from the transcription
 def generate_blog_from_transcription(transcription):
-    """
-    Generates blog content from a transcription.
-    
-    Args:
-        transcription (str): The transcription text.
-    
-    Returns:
-        str: The generated blog content.
-    """
-    # For now, simply return the transcription itself as the blog content
+    # This function can be expanded to generate more complex blog content
     return transcription
 
-# View for rendering the list of blog articles
 def blog_list(request):
-    """
-    Renders the list of blog articles.
-    
-    Args:
-        request: The HTTP request.
-    
-    Returns:
-        Rendered page displaying the list of blog articles.
-    """
     blog_articles = BlogPost.objects.filter(user=request.user)
     return render(request, "all-blogs.html", {'blog_articles': blog_articles})
 
-# View for rendering details of a specific blog article
 def blog_details(request, pk):
-    """
-    Renders details of a specific blog article.
-    
-    Args:
-        request: The HTTP request.
-        pk (int): The primary key of the blog article.
-    
-    Returns:
-        Rendered page displaying details of the specified blog article.
-    """
-    blog_article_detail = BlogPost.objects.get(id=pk)
-    if request.user == blog_article_detail.user:
-        return render(request, 'blog-details.html', {'blog_article_detail': blog_article_detail})
-    else:
-        return redirect('/')
+    try:
+        blog_article_detail = BlogPost.objects.get(id=pk)
+        if request.user == blog_article_detail.user:
+            return render(request, 'blog-details.html', {'blog_article_detail': blog_article_detail})
+        else:
+            return redirect('/')
+    except BlogPost.DoesNotExist:
+        return JsonResponse({'error': 'Blog article does not exist'}, status=404)
 
-# View for user login
 def user_login(request):
-    """
-    Handles user login.
-    
-    Args:
-        request: The HTTP request.
-    
-    Returns:
-        Rendered login page with error message if login fails.
-    """
     if request.method == 'POST':
-        username = request.POST['username']
-        password = request.POST['password']
+        username = request.POST.get('username')
+        password = request.POST.get('password')
 
         user = authenticate(request, username=username, password=password)
         if user is not None:
@@ -197,22 +222,12 @@ def user_login(request):
         
     return render(request, 'login.html')
 
-# View for user signup
 def user_signup(request):
-    """
-    Handles user signup.
-    
-    Args:
-        request: The HTTP request.
-    
-    Returns:
-        Rendered signup page with error message if signup fails.
-    """
     if request.method == 'POST':
-        username = request.POST['username']
-        email = request.POST['email']
-        password = request.POST['password']
-        repeatPassword = request.POST['repeatPassword']
+        username = request.POST.get('username')
+        email = request.POST.get('email')
+        password = request.POST.get('password')
+        repeatPassword = request.POST.get('repeatPassword')
 
         if password == repeatPassword:
             try:
@@ -220,25 +235,31 @@ def user_signup(request):
                 user.save()
                 login(request, user)
                 return redirect('/')
-            except:
+            except Exception as e:
+                logging.error(f"Error creating account: {e}")
                 error_message = 'Error creating account'
-                return render(request, 'signup.html', {'error_message':error_message})
+                return render(request, 'signup.html', {'error_message': error_message})
         else:
-            error_message = 'Password do not match'
-            return render(request, 'signup.html', {'error_message':error_message})
+            error_message = 'Passwords do not match'
+            return render(request, 'signup.html', {'error_message': error_message})
         
     return render(request, 'signup.html')
 
-# View for user logout
 def user_logout(request):
-    """
-    Handles user logout.
-    
-    Args:
-        request: The HTTP request.
-    
-    Returns:
-        Redirects to the homepage after logout.
-    """
     logout(request)
     return redirect('main')
+
+@csrf_exempt
+def translate_content(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        content = data.get('content')
+        language = data.get('language')
+
+        if content and language:
+            translator = Translator()
+            translation = translator.translate(content, dest=language)
+            return JsonResponse({'translated_content': translation.text})
+        else:
+            return JsonResponse({'error': 'Invalid data'}, status=400)
+    return JsonResponse({'error': 'Invalid request method'}, status=405)
