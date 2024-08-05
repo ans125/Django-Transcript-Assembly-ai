@@ -46,7 +46,29 @@ requests==2.28.2
 sqlparse==0.4.3
 webencodings==0.5.1
 websockets==11.0.3
----------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------
+python -m venv venv
+
+venv\Scripts\activate
+
+pip install -r requirements.txt
+
+deactivate
+
+source venv/bin/activate  # Use `venv\Scripts\activate` on Windows
+pip install --upgrade httpcore
+
+pip install httpcore==0.13.6
+
+pip install --upgrade googletrans
+
+
+pip install googletrans==4.0.0-rc1
+
+pip install -r requirements.txt
+
+python manage.py runserver
+--------------------------------------------------------------------------------------------
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import render, redirect
